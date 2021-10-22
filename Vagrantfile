@@ -55,6 +55,8 @@ do
 done
 nomad -autocomplete-install
 
+echo "Installing go and make..."
+sudo dnf install -y go make
 SCRIPT
 
 Vagrant.configure(2) do |config|
