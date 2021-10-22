@@ -23,10 +23,16 @@ sudo install nomad /usr/bin/nomad
 sudo mkdir -p /etc/nomad.d
 sudo chmod a+w /etc/nomad.d
 
+echo "Installing Nomad Pack..."
+NOMAD_PACK_VERSION=0.0.1
+curl -sSL https://releases.hashicorp.com/nomad-pack/${NOMAD_PACK_VERSION}-techpreview1/nomad-pack_${NOMAD_PACK_VERSION}-techpreview1_linux_amd64.zip -o nomad-pack.zip
+unzip nomad-pack.zip
+sudo install nomad-pack /usr/bin/nomad-pack
+
 echo "Installing Consul..."
 CONSUL_VERSION=1.10.3
 curl -sSL https://releases.hashicorp.com/consul/${CONSUL_VERSION}/consul_${CONSUL_VERSION}_linux_amd64.zip > consul.zip
-unzip /tmp/consul.zip
+unzip consul.zip
 sudo install consul /usr/bin/consul
 (
 cat <<-EOF
