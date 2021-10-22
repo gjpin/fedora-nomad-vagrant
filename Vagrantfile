@@ -40,6 +40,40 @@ sudo mkdir -p /etc/nomad.d
 sudo chmod a+w /etc/nomad.d
 (
 cat <<-EOF
+data_dir = "/opt/nomad/data"
+
+datacenter = "dc1"
+
+bind_addr = "0.0.0.0"
+
+server {
+  enabled = true
+  bootstrap_expect = 1
+}
+
+client {
+  enabled = true
+
+  cni_path = "/opt/cni/bin"
+}
+
+plugin "docker" {
+  config {
+    extra_labels = ["job_name", "job_id", "task_group_name", "task_name", "namespace", "node_name", "node_id"]
+
+    volumes {
+      enabled = true
+      selinuxlabel = "z"
+    }
+
+    allow_privileged = false
+  }
+}
+
+EOF
+) | sudo tee /etc/nomad.d/nomad.hcl
+(
+cat <<-EOF
   [Unit]
   Description=nomad agent
   Requires=network-online.target
@@ -47,7 +81,7 @@ cat <<-EOF
 
   [Service]
   Restart=on-failure
-  ExecStart=/usr/bin/nomad agent -dev -bind 0.0.0.0 -log-level INFO
+  ExecStart=/usr/bin/nomad agent -config /etc/nomad.d
   ExecReload=/bin/kill -HUP $MAINPID
 
   [Install]
