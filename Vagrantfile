@@ -12,16 +12,50 @@ sudo usermod -aG docker vagrant
 sudo docker --version
 
 # Packages required for nomad & consul
-sudo dnf install -y unzip curl vim jq
+sudo dnf install -y unzip curl vim jq nano
+
+echo "Installing CNI plugins..."
+cd /tmp/
+curl -L -o cni-plugins.tgz "https://github.com/containernetworking/plugins/releases/download/v1.0.0/cni-plugins-linux-$( [ $(uname -m) = aarch64 ] && echo arm64 || echo amd64)"-v1.0.0.tgz
+sudo mkdir -p /opt/cni/bin
+sudo tar -C /opt/cni/bin -xzf cni-plugins.tgz
+echo 1 | sudo tee /proc/sys/net/bridge/bridge-nf-call-arptables
+echo 1 | sudo tee /proc/sys/net/bridge/bridge-nf-call-ip6tables
+echo 1 | sudo tee /proc/sys/net/bridge/bridge-nf-call-iptables
+(
+cat <<-EOF
+net.bridge.bridge-nf-call-arptables = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+EOF
+) | sudo tee /etc/sysctl.d/cni-plugins.conf
+
 
 echo "Installing Nomad..."
 NOMAD_VERSION=1.1.6
-cd /tmp/
 curl -sSL https://releases.hashicorp.com/nomad/${NOMAD_VERSION}/nomad_${NOMAD_VERSION}_linux_amd64.zip -o nomad.zip
 unzip nomad.zip
 sudo install nomad /usr/bin/nomad
 sudo mkdir -p /etc/nomad.d
 sudo chmod a+w /etc/nomad.d
+(
+cat <<-EOF
+  [Unit]
+  Description=nomad agent
+  Requires=network-online.target
+  After=network-online.target
+
+  [Service]
+  Restart=on-failure
+  ExecStart=/usr/bin/nomad agent -dev -bind 0.0.0.0 -log-level INFO
+  ExecReload=/bin/kill -HUP $MAINPID
+
+  [Install]
+  WantedBy=multi-user.target
+EOF
+) | sudo tee /etc/systemd/system/nomad.service
+sudo systemctl enable nomad.service
+sudo systemctl start nomad
 
 echo "Installing Nomad Pack..."
 NOMAD_PACK_VERSION=0.0.1
