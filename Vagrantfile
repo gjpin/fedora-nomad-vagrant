@@ -30,6 +30,8 @@ net.bridge.bridge-nf-call-iptables = 1
 EOF
 ) | sudo tee /etc/sysctl.d/cni-plugins.conf
 
+# Create folder for wordpress host volume
+sudo mkdir -p /var/lib/mariadb
 
 echo "Installing Nomad..."
 NOMAD_VERSION=1.1.6
@@ -38,6 +40,7 @@ unzip nomad.zip
 sudo install nomad /usr/bin/nomad
 sudo mkdir -p /etc/nomad.d
 sudo chmod a+w /etc/nomad.d
+
 (
 cat <<-EOF
 data_dir = "/opt/nomad/data"
@@ -55,6 +58,11 @@ client {
   enabled = true
 
   cni_path = "/opt/cni/bin"
+
+  host_volume "wordpress-mariadb" {
+    path      = "/var/lib/mariadb"
+    read_only = false
+  }
 }
 
 plugin "docker" {
@@ -79,6 +87,7 @@ telemetry {
 }
 EOF
 ) | sudo tee /etc/nomad.d/nomad.hcl
+
 (
 cat <<-EOF
   [Unit]
@@ -109,6 +118,34 @@ CONSUL_VERSION=1.10.3
 curl -sSL https://releases.hashicorp.com/consul/${CONSUL_VERSION}/consul_${CONSUL_VERSION}_linux_amd64.zip > consul.zip
 unzip consul.zip
 sudo install consul /usr/bin/consul
+sudo mkdir -p /etc/consul.d
+sudo chmod a+w /etc/consul.d
+
+(
+cat <<-EOF
+datacenter = "dc1"
+
+data_dir = "/opt/consul"
+
+ui_config {
+  enabled = true
+}
+
+server = true
+
+bootstrap_expect = 1
+
+# Enable Consul Connect
+ports {
+  grpc = 8502
+}
+
+connect {
+  enabled = true
+}
+EOF
+) | sudo tee /etc/consul.d/consul.hcl
+
 (
 cat <<-EOF
   [Unit]
@@ -118,13 +155,14 @@ cat <<-EOF
 
   [Service]
   Restart=on-failure
-  ExecStart=/usr/bin/consul agent -dev
+  ExecStart=/usr/bin/consul agent -config-dir=/etc/consul.d/ -bind '{{ GetInterfaceIP "eth0" }}'
   ExecReload=/bin/kill -HUP $MAINPID
 
   [Install]
   WantedBy=multi-user.target
 EOF
 ) | sudo tee /etc/systemd/system/consul.service
+
 sudo systemctl enable consul.service
 sudo systemctl start consul
 
@@ -147,6 +185,8 @@ Vagrant.configure(2) do |config|
 
   # Expose the nomad api and ui to the host
   config.vm.network "forwarded_port", guest: 4646, host: 9646, auto_correct: true, host_ip: "127.0.0.1"
+  # Expose the consul api and ui to the host
+  config.vm.network "forwarded_port", guest: 8500, host: 10500, auto_correct: true, host_ip: "127.0.0.1"
 
   # Use libvirt provider and allocate resources
   config.vm.provider :libvirt do |v|
