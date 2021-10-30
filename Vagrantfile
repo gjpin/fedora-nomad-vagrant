@@ -78,6 +78,12 @@ plugin "docker" {
   }
 }
 
+plugin "raw_exec" {
+  config {
+    enabled = true
+  }
+}
+
 telemetry {
   collection_interval = "5s"
   disable_hostname = false
